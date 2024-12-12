@@ -1,7 +1,6 @@
 import logging
 import random
 import time
-from os import times
 
 from pymodbus.client import ModbusTcpClient
 from pymodbus.exceptions import ModbusException
@@ -27,7 +26,6 @@ def convert_to_unsigned(value):
         return value
     else:
         raise ValueError(f"Value {value} out of range for 16-bit Modbus register")
-
 
 def write_single_register(address, value, slave_id=1):
     try:
@@ -67,23 +65,67 @@ def write_single_register(address, value, slave_id=1):
     finally:
         pass
 
+def read_holding_registers(start_address, count, slave_id=1):
+    try:
+        # Read holding registers (Function code 03)
+        response = mb_master_client.read_holding_registers(start_address, count, slave=slave_id)
+
+        if response.isError():
+            msg = f"Read holding registers failed: Start Address={start_address}, Count={count}, Slave ID={slave_id}"
+            print(msg)
+            logging.error(msg)
+            return None
+        else:
+            msg = f"Read holding registers successful: Start Address={start_address}, Count={count}, Values={response.registers}, Slave ID={slave_id}"
+            print(msg)
+            logging.info(msg)
+            return response.registers
+
+    except ModbusException as e:
+        msg = f"Modbus exception: {e}"
+        print(msg)
+        logging.error(msg)
+        return None
+    except Exception as ex:
+        msg = f"Unexpected error: {ex}"
+        print(msg)
+        logging.error(msg)
+        return None
+
+def read_input_registers(start_address, count, slave_id=1):
+    try:
+        # Read input registers (Function code 04)
+        response = mb_master_client.read_input_registers(start_address, count, slave=slave_id)
+
+        if response.isError():
+            msg = f"Read input registers failed: Start Address={start_address}, Count={count}, Slave ID={slave_id}"
+            print(msg)
+            logging.error(msg)
+            return None
+        else:
+            msg = f"Read input registers successful: Start Address={start_address}, Count={count}, Values={response.registers}, Slave ID={slave_id}"
+            print(msg)
+            logging.info(msg)
+            return response.registers
+
+    except ModbusException as e:
+        msg = f"Modbus exception: {e}"
+        print(msg)
+        logging.error(msg)
+        return None
+    except Exception as ex:
+        msg = f"Unexpected error: {ex}"
+        print(msg)
+        logging.error(msg)
+        return None
 
 def generate_random_value():
     return random.randint(-60, 60)
-
 
 def send_multiple_requests(slave_id, address_values, delays, retries=1):
     for i in range(1, retries + 1):
         logging.info(f"Attempt {i} of {retries}")
         for address, value in address_values:
-            if address == 400 or address == 401:
-                vt = value + generate_random_value()
-                success = write_single_register(address, vt, slave_id)
-                if success:
-                    logging.info(f"Successfully wrote Address={address}, Value={value}")
-                else:
-                    logging.error(f"Failed to write Address={address}, Value={value}")
-            else:
                 success = write_single_register(address, value, slave_id)
                 if success:
                     logging.info(f"Successfully wrote Address={address}, Value={value}")
@@ -93,18 +135,15 @@ def send_multiple_requests(slave_id, address_values, delays, retries=1):
     logging.info(f"All Have Complete {retries}")
     mb_master_client.close()
 
-
 # Main program
 if __name__ == "__main__":
     configure_logging()
 
-    # server_host = "192.168.1.122"  # Modbus server IP
-
-    server_host = "127.0.0.1"  # Modbus server IP
+    server_host = "192.168.1.122"  # Modbus server IP
     server_port = 502  # Modbus TCP default port
     slave_id = 17  # Modbus slave ID
-    #
-    retry = 100  # Number of send attempts
+
+    retry_num = 1  # Number of send attempts
 
     # Create Modbus TCP client
     mb_master_client = ModbusTcpClient(host=server_host, port=server_port)
@@ -115,13 +154,20 @@ if __name__ == "__main__":
         print(msg)
         logging.error(msg)
     else:
-        msg = f"Successfully to connect to Modbus server {server_host}:{server_port}"
+        msg = f"Successfully connected to Modbus server {server_host}:{server_port}"
         print(msg)
-        logging.error(msg)
+        logging.info(msg)
+
+        # Example: Read holding registers
+        read_holding_registers(400, 3, slave_id)
+
+        # Example: Read input registers
+        read_input_registers(300, 3, slave_id)
+
         # List of registers and values to write (includes negative values)
         address_values = [
             (400, -2323),  # Branch 1
             (401, -2345),  # Branch 2 (negative value)
             (402, 0x00)  # Leak word
         ]
-        send_multiple_requests(slave_id, address_values, delays=1, retries=retry)
+        send_multiple_requests(slave_id, address_values, delays=1, retries=retry_num)
